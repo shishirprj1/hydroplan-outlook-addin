@@ -1,2 +1,226 @@
-# hydroplan-outlook-addin
-Hydroplan SharePoint panel for Outlook
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hydroplan SharePoint Panel</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: Segoe UI, sans-serif; }
+    body { background: #f5f5f5; font-size: 13px; }
+    #header { background: #0078d4; color: white; padding: 10px 12px; font-size: 14px; font-weight: 600; }
+    #search-box { padding: 8px; background: white; border-bottom: 1px solid #ddd; }
+    #search-box input { width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
+    #status { padding: 6px 12px; font-size: 11px; color: #666; background: #fff; border-bottom: 1px solid #eee; }
+    #tree { overflow-y: auto; height: calc(100vh - 180px); background: white; }
+    .folder { padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid #f0f0f0; }
+    .folder:hover { background: #e8f4fd; }
+    .folder.selected { background: #cce4f7; }
+    .folder-icon { font-size: 14px; }
+    .folder-name { flex: 1; font-size: 12px; color: #333; }
+    .subfolder { padding-left: 24px; display: none; }
+    .subfolder.open { display: block; }
+    #actions { padding: 8px; background: #f0f0f0; border-top: 1px solid #ddd; position: fixed; bottom: 0; width: 100%; }
+    #file-btn { width: 100%; padding: 8px; background: #0078d4; color: white; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; font-weight: 600; }
+    #file-btn:hover { background: #006cbf; }
+    #file-btn:disabled { background: #aaa; cursor: not-allowed; }
+    #msg { margin-top: 6px; font-size: 11px; text-align: center; color: #333; min-height: 16px; }
+    .loading { color: #0078d4; font-style: italic; padding: 12px; text-align: center; }
+    .error-msg { color: #a00; padding: 12px; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+<div id="header">📁 Hydroplan SharePoint</div>
+
+<div id="search-box">
+  <input type="text" id="search" placeholder="Search project folders..." oninput="filterFolders()">
+</div>
+
+<div id="status">Loading libraries...</div>
+<div id="tree"><div class="loading">Connecting to SharePoint...</div></div>
+
+<div id="actions">
+  <button id="file-btn" onclick="fileEmail()" disabled>
+    📧 File Email to Selected Folder
+  </button>
+  <div id="msg"></div>
+</div>
+
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<script>
+  var selectedFolder = null;
+  var selectedFolderName = '';
+  var allFolders = [];
+
+  // =============================================
+  // CONFIGURE YOUR SHAREPOINT DETAILS HERE
+  // =============================================
+  var SHAREPOINT_SITE = 'https://hydroplangroup.sharepoint.com/sites/Projects';
+  var LIBRARIES = [
+    { name: 'Projects', path: '/Projects' },
+    { name: 'Project Enquiries', path: '/ProjectEnquiries' }
+  ];
+  // =============================================
+
+  Office.onReady(function(info) {
+    if (info.host === Office.HostType.Outlook) {
+      loadFolders();
+    }
+  });
+
+  function loadFolders() {
+    var tree = document.getElementById('tree');
+    var status = document.getElementById('status');
+    tree.innerHTML = '';
+    allFolders = [];
+
+    LIBRARIES.forEach(function(lib) {
+      var libHeader = document.createElement('div');
+      libHeader.className = 'folder';
+      libHeader.style.background = '#e8f0fe';
+      libHeader.style.fontWeight = '600';
+      libHeader.innerHTML = '<span class="folder-icon">🗂️</span><span class="folder-name">' + lib.name + '</span>';
+      
+      var subContainer = document.createElement('div');
+      subContainer.className = 'subfolder';
+      subContainer.id = 'sub-' + lib.name;
+      subContainer.innerHTML = '<div class="loading">Loading...</div>';
+
+      libHeader.onclick = function() {
+        var sub = document.getElementById('sub-' + lib.name);
+        if (sub.classList.contains('open')) {
+          sub.classList.remove('open');
+        } else {
+          sub.classList.add('open');
+          fetchSubfolders(lib, subContainer);
+        }
+      };
+
+      tree.appendChild(libHeader);
+      tree.appendChild(subContainer);
+    });
+
+    status.textContent = 'Click a library to expand folders';
+  }
+
+  function fetchSubfolders(lib, container) {
+    var apiUrl = SHAREPOINT_SITE + "/_api/web/GetFolderByServerRelativeUrl('" + 
+                 lib.path + "')/Folders?$orderby=Name&$top=200";
+
+    fetch(apiUrl, {
+      headers: { 'Accept': 'application/json;odata=verbose' },
+      credentials: 'include'
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      container.innerHTML = '';
+      var folders = data.d.results;
+      
+      if (folders.length === 0) {
+        container.innerHTML = '<div style="padding:8px 24px;color:#888;font-size:11px;">No subfolders found</div>';
+        return;
+      }
+
+      folders.forEach(function(folder) {
+        if (folder.Name === 'Forms') return;
+        
+        var div = document.createElement('div');
+        div.className = 'folder subfolder-item';
+        div.style.paddingLeft = '28px';
+        div.style.borderBottom = '1px solid #f0f0f0';
+        div.innerHTML = '<span class="folder-icon">📁</span><span class="folder-name">' + folder.Name + '</span>';
+        div.dataset.path = lib.path + '/' + folder.Name;
+        div.dataset.name = folder.Name;
+
+        div.onclick = function() {
+          document.querySelectorAll('.folder').forEach(function(f) { f.classList.remove('selected'); });
+          div.classList.add('selected');
+          selectedFolder = div.dataset.path;
+          selectedFolderName = div.dataset.name;
+          document.getElementById('file-btn').disabled = false;
+          document.getElementById('status').textContent = 'Selected: ' + selectedFolderName;
+          document.getElementById('msg').textContent = '';
+        };
+
+        allFolders.push({ el: div, name: folder.Name.toLowerCase() });
+        container.appendChild(div);
+      });
+    })
+    .catch(function(err) {
+      container.innerHTML = '<div class="error-msg">Could not load folders. Make sure you are signed into SharePoint in your browser.</div>';
+    });
+  }
+
+  function filterFolders() {
+    var query = document.getElementById('search').value.toLowerCase();
+    allFolders.forEach(function(f) {
+      f.el.style.display = (!query || f.name.includes(query)) ? 'flex' : 'none';
+    });
+  }
+
+  function fileEmail() {
+    if (!selectedFolder) return;
+    
+    var btn = document.getElementById('file-btn');
+    var msg = document.getElementById('msg');
+    btn.disabled = true;
+    btn.textContent = 'Filing...';
+    msg.textContent = '';
+
+    var item = Office.context.mailbox.item;
+    var subject = item.subject || 'No Subject';
+    var sender = '';
+    
+    item.from.getAsync(function(result) {
+      if (result.status === Office.AsyncResultStatus.Succeeded) {
+        sender = result.value.displayName || '';
+      }
+
+      item.body.getAsync(Office.CoercionType.Text, function(bodyResult) {
+        var body = '';
+        if (bodyResult.status === Office.AsyncResultStatus.Succeeded) {
+          body = bodyResult.value || '';
+        }
+
+        var now = new Date();
+        var dateStr = now.getFullYear() + '-' + 
+                      String(now.getMonth()+1).padStart(2,'0') + '-' + 
+                      String(now.getDate()).padStart(2,'0');
+        var fileName = dateStr + ' - ' + subject.replace(/[\/\\:*?"<>|]/g, '_').substring(0, 60) + '.txt';
+        var fileContent = 'From: ' + sender + '\nSubject: ' + subject + '\nDate: ' + now.toLocaleString() + '\n\n' + body;
+
+        var uploadUrl = SHAREPOINT_SITE + "/_api/web/GetFolderByServerRelativeUrl('" + 
+                        selectedFolder + "')/Files/add(url='" + encodeURIComponent(fileName) + "',overwrite=true)";
+
+        fetch(uploadUrl, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json;odata=verbose',
+            'X-RequestDigest': '',
+            'Content-Type': 'text/plain'
+          },
+          credentials: 'include',
+          body: fileContent
+        })
+        .then(function(r) {
+          if (r.ok) {
+            msg.style.color = 'green';
+            msg.textContent = '✓ Filed to: ' + selectedFolderName;
+          } else {
+            return r.json().then(function(e) { throw new Error(e.error && e.error.message ? e.error.message.value : 'Upload failed'); });
+          }
+        })
+        .catch(function(err) {
+          msg.style.color = 'red';
+          msg.textContent = '✗ Error: ' + err.message;
+        })
+        .finally(function() {
+          btn.disabled = false;
+          btn.textContent = '📧 File Email to Selected Folder';
+        });
+      });
+    });
+  }
+</script>
+</body>
+</html>
