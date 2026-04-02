@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+           xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0"
+           xsi:type="MailApp">
+
+  <Id>f3c2b8c0-7c11-4f8e-9a5a-123456789abc</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>Hydroplan</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="Hydroplan DMS"/>
+  <Description DefaultValue="File emails to SharePoint"/>
+
+  <IconUrl DefaultValue="https://shishirprj1.github.io/hydroplan-outlook-addin/icon.png"/>
+  <HighResolutionIconUrl DefaultValue="https://shishirprj1.github.io/hydroplan-outlook-addin/icon.png"/>
+
+  <SupportUrl DefaultValue="https://hydroplangroup.sharepoint.com"/>
+
+  <AppDomains>
+    <AppDomain>https://hydroplangroup.sharepoint.com</AppDomain>
+  </AppDomains>
+
+  <Hosts>
+    <Host Name="Mailbox"/>
+  </Hosts>
+
+  <Requirements>
+    <Sets>
+      <Set Name="Mailbox" MinVersion="1.3"/>
+    </Sets>
+  </Requirements>
+
+  <FormSettings>
+    <Form xsi:type="ItemRead">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="https://shishirprj1.github.io/hydroplan-outlook-addin/taskpane.html"/>
+        <RequestedHeight>500</RequestedHeight>
+      </DesktopSettings>
+    </Form>
+  </FormSettings>
+
+  <Permissions>ReadWriteItem</Permissions>
+
+  <Rule xsi:type="RuleCollection" Mode="Or">
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Read"/>
+  </Rule>
+
+</OfficeApp>
